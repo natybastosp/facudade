@@ -27,4 +27,3 @@ carro.freia();
 carro.exibirVelocidade(); // Saída: Velocidade atual: 1 km/h
 ```
 
----
