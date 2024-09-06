@@ -227,9 +227,3 @@ function compile(filename) {
 Lê o código, valida e compila cada linha, reportando erros encontrados.
 
 ---
-
-Este é um resumo geral do funcionamento do código. Se precisar de mais detalhes sobre qualquer parte específica, sinta-se à vontade para perguntar!
-
-```
-
-```
