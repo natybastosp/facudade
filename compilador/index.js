@@ -5,58 +5,59 @@ Natalia Baastos Pereira 2212082020
 
 const fs = require("fs");
 
-function AnalisadorLexico() {
-  const tokenDefinitions = [
-    { type: "NUMERO_LINHA", regex: /^\d+/ },
-    { type: "PALAVRA", regex: /\b(rem|input|let|if|goto|print|end)\b/ },
-    {
-      type: "IDENTIFICADOR",
-      regex:
-        /[a-zA-ZçãõâêîôûáéíóúàèìòùÇÃÕÂÊÎÔÛÁÉÍÓÚÀÈÌÒÙ][a-zA-Z0-9çãõâêîôûáéíóúàèìòùÇÃÕÂÊÎÔÛÁÉÍÓÚÀÈÌÒÙ]*/,
-    },
-    { type: "NUMERO", regex: /^\d+/ },
-    { type: "OPERADOR", regex: /^=/ },
-    { type: "OPERADOR_MATEMATICO", regex: /^[+\-*/%]/ },
-    { type: "ESPACO", regex: /^\s+/ },
-  ];
+// Analisador Léxico
+class LexicalAnalyzer {
+  constructor() {
+    this.tokenDefinitions = [
+      { category: "LINE_NUMBER", pattern: /^\d+/ },
+      { category: "KEYWORD", pattern: /\b(rem|input|let|if|goto|print|end)\b/ },
+      {
+        category: "IDENTIFIER",
+        pattern:
+          /[a-zA-ZçãõâêîôûáéíóúàèìòùÇÃÕÂÊÎÔÛÁÉÍÓÚÀÈÌÒÙ][a-zA-Z0-9çãõâêîôûáéíóúàèìòùÇÃÕÂÊÎÔÛÁÉÍÓÚÀÈÌÒÙ]*/,
+      },
+      { category: "NUMBER", pattern: /^\d+/ },
+      { category: "ASSIGN_OPERATOR", pattern: /^=/ },
+      { category: "MATH_OPERATOR", pattern: /^[+\-*/%]/ },
+      { category: "WHITESPACE", pattern: /^\s+/ },
+    ];
+  }
 
-  function obterProximoToken(linha) {
-    for (let def of tokenDefinitions) {
-      const match = linha.match(def.regex);
+  extractNextToken(line) {
+    for (let def of this.tokenDefinitions) {
+      const match = line.match(def.pattern);
       if (match) {
-        return { type: def.type, value: match[0] };
+        return { category: def.category, value: match[0] };
       }
     }
     return null;
   }
-  // ta dando ruim na função analise ta pegando letras aleatorias
-  function analise(linha) {
-    // Função que analisa a linha
-    let tokens = [];
-    let esperaAtribuicao = false;
 
-    while (linha.length > 0) {
-      const token = obterProximoToken(linha);
+  analyze(line) {
+    let tokens = [];
+    let awaitingAssignment = false;
+
+    while (line.length > 0) {
+      const token = this.extractNextToken(line);
+
       if (!token) {
-        console.log(`Token não reconhecido na linha: ${linha}`);
+        this.displayError(`Unrecognized token in line: ${line}`);
+        break;
       }
 
-      // Ignorar espaços
-      if (token.type === "ESPACO") {
-        linha = linha.slice(token.value.length);
+      if (token.category === "WHITESPACE") {
+        line = line.slice(token.value.length);
         continue;
       }
 
-      // Adicionar token ao array de tokens
-      tokens.push({ tipo: token.type, value: token.value });
-      linha = linha.slice(token.value.length);
+      tokens.push({ category: token.category, value: token.value });
+      line = line.slice(token.value.length);
 
-      if (token.type === "PALAVRA" && token.value.toLowerCase() === "let") {
-        esperaAtribuicao = true;
+      if (token.category === "KEYWORD" && token.value.toLowerCase() === "let") {
+        awaitingAssignment = true;
       }
 
-      // Se encontrarmos rem, ignorar o restante da linha
-      if (token.type === "PALAVRA" && token.value.toLowerCase() === "rem") {
+      if (token.category === "KEYWORD" && token.value.toLowerCase() === "rem") {
         return tokens;
       }
     }
@@ -64,198 +65,175 @@ function AnalisadorLexico() {
     return tokens;
   }
 
-  return { analise };
+  displayError(message) {
+    console.error(`Error: ${message}`);
+  }
 }
 
-/**
- * AnalisadorSintatico class.
- *
- * @class
- * @param {Array} linhasValidas - The valid lines.
- * @returns {Object} - The AnalisadorSintatico object.
- */
-function AnalisadorSintatico(linhasValidas) {
-  const statementHandlers = {
-    LET: analisarLet,
-    IF: analisarIf,
-    GOTO: analisarGoto,
-    PRINT: analisarPrint,
-    INPUT: analisarInput,
-    REM: () => ({ tipo: "REM" }),
-    END: () => ({ tipo: "END" }),
-  };
+// Analisador Sintático
+class SyntacticAnalyzer {
+  constructor(validLines) {
+    this.statementHandlers = {
+      LET: this.processLet.bind(this),
+      IF: this.processIf.bind(this),
+      GOTO: this.processGoto.bind(this),
+      PRINT: this.processPrint.bind(this),
+      INPUT: this.processInput.bind(this),
+      REM: () => ({ type: "REM" }),
+      END: () => ({ type: "END" }),
+    };
+    this.validLines = validLines;
+  }
 
-  function analise(tokens) {
-    // Função que analisa os tokens
+  analyze(tokens) {
     let index = 0;
-    const linhaNumero = tokens[index].value;
+    const lineNumber = tokens[index].value;
     index++;
 
     const statementToken = tokens[index];
     const statement = statementToken.value.toUpperCase();
 
-    if (statementHandlers[statement]) {
-      return statementHandlers[statement](tokens, index + 1, linhaNumero);
+    if (this.statementHandlers[statement]) {
+      return this.statementHandlers[statement](tokens, index + 1, lineNumber);
     } else {
-      console.log(
-        "Erro sintático: instrução inválida ou palavra-chave desconhecida.",
-        tokens[index],
-        "linha",
-        linhaNumero
+      this.displayError(
+        `Syntax Error: Invalid statement or unknown keyword in line ${lineNumber}.`
       );
     }
   }
 
-  // Funções para analisar cada tipo de instrução
-  function analisarLet(tokens, index, linhaNumero) {
-    if (tokens[index].tipo === "IDENTIFICADOR") {
-      const identificador = tokens[index].value;
+  processLet(tokens, index, lineNumber) {
+    if (tokens[index].category === "IDENTIFIER") {
+      const identifier = tokens[index].value;
       index++;
 
-      if (tokens[index].tipo === "OPERADOR" && tokens[index].value === "=") {
+      if (
+        tokens[index].category === "ASSIGN_OPERATOR" &&
+        tokens[index].value === "="
+      ) {
         index++;
 
-        let expressao = [];
+        let expression = [];
         while (index < tokens.length) {
-          let token = tokens[index];
-          if (token.tipo === "IDENTIFICADOR" || token.tipo === "NUMERO") {
-            expressao.push(token);
-          } else if (token.tipo === "OPERADOR_MATEMATICO") {
+          const token = tokens[index];
+
+          if (token.category === "IDENTIFIER" || token.category === "NUMBER") {
+            expression.push(token);
+          } else if (token.category === "MATH_OPERATOR") {
             if (
-              expressao.length === 0 ||
-              expressao[expressao.length - 1].tipo === "OPERADOR_MATEMATICO"
+              expression.length === 0 ||
+              expression[expression.length - 1].category === "MATH_OPERATOR"
             ) {
-              console.log(
-                "Erro sintático: Operador sem operandos válidos.",
-                tokens[index],
-                "linha",
-                linhaNumero
+              this.displayError(
+                `Syntax Error: Operator without valid operands in line ${lineNumber}.`
               );
             }
-            expressao.push(token);
+            expression.push(token);
           } else {
-            console.log(
-              "Erro sintático: Token inesperado na expressão LET.",
-              tokens[index],
-              "linha",
-              linhaNumero
+            this.displayError(
+              `Syntax Error: Unexpected token in LET expression in line ${lineNumber}.`
             );
           }
           index++;
         }
 
         if (
-          expressao.length > 0 &&
-          expressao[expressao.length - 1].tipo === "OPERADOR_MATEMATICO"
+          expression.length > 0 &&
+          expression[expression.length - 1].category === "MATH_OPERATOR"
         ) {
-          console.log(
-            "Erro sintático: Expressão não pode terminar com um operador.",
-            tokens[index],
-            "linha",
-            linhaNumero
+          this.displayError(
+            `Syntax Error: Expression cannot end with an operator in line ${lineNumber}.`
           );
         }
 
-        return { tipo: "LET", identificador, expressao, linhaNumero };
+        return { type: "LET", identifier, expression, lineNumber };
       } else {
-        console.log(
-          "Erro sintático: Faltando operador '=' após a variável.",
-          tokens[index],
-          "linha",
-          linhaNumero
+        this.displayError(
+          `Syntax Error: Missing "=" operator after variable in line ${lineNumber}.`
         );
       }
     } else {
-      console.log(
-        "Erro sintático: Esperado identificador após LET.",
-        tokens[index],
-        "linha",
-        linhaNumero
+      this.displayError(
+        `Syntax Error: Expected identifier after LET in line ${lineNumber}.`
       );
     }
   }
 
-  // Função para analisar a instrução IF
-  function analisarIf(tokens, index, linhaNumero) {
+  processIf(tokens, index, lineNumber) {
     const thenIndex = tokens.findIndex(
       (token, i) => token.value.toUpperCase() === "THEN" && i > index
     );
     if (thenIndex === -1) {
-      console.log(
-        "Erro sintático: falta a palavra-chave THEN na instrução IF.",
-        tokens[index],
-        "linha",
-        linhaNumero
+      this.displayError(
+        `Syntax Error: Missing "THEN" keyword in IF statement in line ${lineNumber}.`
       );
     }
 
     const condition = tokens.slice(index, thenIndex);
     const gotoLine = tokens[thenIndex + 1].value;
-    if (!linhasValidas.includes(gotoLine)) {
-      console.log(
-        `Erro sintático: linha de destino ${gotoLine} não existe.`,
-        tokens[index]
+    if (!this.validLines.includes(gotoLine)) {
+      this.displayError(
+        `Syntax Error: Destination line ${gotoLine} does not exist in line ${lineNumber}.`
       );
     }
 
-    return { tipo: "IF", condition, gotoLine, linhaNumero };
+    return { type: "IF", condition, gotoLine, lineNumber };
   }
 
-  function analisarGoto(tokens, index, linhaNumero) {
+  processGoto(tokens, index, lineNumber) {
     const gotoLine = tokens[index].value;
-    if (!linhasValidas.includes(gotoLine)) {
-      console.log(`Erro sintático: linha de destino ${gotoLine} não existe.`);
+    if (!this.validLines.includes(gotoLine)) {
+      this.displayError(
+        `Syntax Error: Destination line ${gotoLine} does not exist in line ${lineNumber}.`
+      );
     }
-    return { tipo: "GOTO", gotoLine, linhaNumero };
+    return { type: "GOTO", gotoLine, lineNumber };
   }
 
-  function analisarPrint(tokens, index, linhaNumero) {
-    if (tokens[index].tipo === "IDENTIFICADOR") {
-      return { tipo: "PRINT", identificador: tokens[index].value, linhaNumero };
+  processPrint(tokens, index, lineNumber) {
+    if (tokens[index].category === "IDENTIFIER") {
+      return { type: "PRINT", identifier: tokens[index].value, lineNumber };
     } else {
-      console.log(
-        "Erro sintático na instrução PRINT.",
-        tokens[index],
-        "linha",
-        linhaNumero
+      this.displayError(
+        `Syntax Error: Invalid PRINT statement in line ${lineNumber}.`
       );
     }
   }
 
-  function analisarInput(tokens, index, linhaNumero) {
-    if (tokens[index].tipo === "IDENTIFICADOR") {
-      return { tipo: "INPUT", identificador: tokens[index].value, linhaNumero };
+  processInput(tokens, index, lineNumber) {
+    if (tokens[index].category === "IDENTIFIER") {
+      return { type: "INPUT", identifier: tokens[index].value, lineNumber };
     } else {
-      console.log(
-        "Erro sintático na instrução INPUT.",
-        tokens[index],
-        "linha",
-        linhaNumero
+      this.displayError(
+        `Syntax Error: Invalid INPUT statement in line ${lineNumber}.`
       );
     }
   }
 
-  return { analise };
+  displayError(message) {
+    console.error(`Error: ${message}`);
+  }
 }
 
 // Analisador Semântico
-function AnalisadorSemantico() {
-  const variaveis = {};
+class SemanticAnalyzer {
+  constructor() {
+    this.variables = {};
+  }
 
-  function analise(ast) {
-    switch (ast.tipo) {
+  analyze(ast) {
+    switch (ast.type) {
       case "LET":
-        verificaExpressao(ast.expressao);
-        variaveis[ast.identificador] = true;
+        this.checkExpression(ast.expression);
+        this.variables[ast.identifier] = true;
         return true;
       case "INPUT":
-        variaveis[ast.identificador] = true;
+        this.variables[ast.identifier] = true;
         return true;
       case "PRINT":
-        if (!variaveis[ast.identificador]) {
-          console.log(
-            `Erro semântico: A variável "${ast.identificador}" não foi definida.`,
-            ast.linhaNumero
+        if (!this.variables[ast.identifier]) {
+          this.displayError(
+            `Semantic Error: Variable "${ast.identifier}" not defined in line ${ast.lineNumber}.`
           );
         }
         return true;
@@ -264,82 +242,80 @@ function AnalisadorSemantico() {
     }
   }
 
-  function verificaExpressao(expressao) {
-    expressao.forEach((token) => {
-      if (token.tipo === "IDENTIFICADOR" && !variaveis[token.value]) {
-        console.log(
-          `Erro semântico: A variável "${token.value}" usada na expressão não foi definida.`
+  checkExpression(expression) {
+    expression.forEach((token) => {
+      if (token.category === "IDENTIFIER" && !this.variables[token.value]) {
+        this.displayError(
+          `Semantic Error: Variable "${token.value}" used in expression not defined.`
         );
       }
     });
   }
 
-  return { analise };
+  displayError(message) {
+    console.error(`Error: ${message}`);
+  }
 }
 
+// Função principal de compilação
 function compile(filename) {
-  const lexer = AnalisadorLexico();
-  const linhasValidas = [];
-  const linhasProcessadas = new Set();
-  let ultimaLinha = 0;
-  let encontrouEnd = false;
+  const lexer = new LexicalAnalyzer();
+  const validLines = [];
+  const processedLines = new Set();
+  let lastLine = 0;
+  let foundEnd = false;
 
   const lines = fs.readFileSync(filename, "utf8").split("\n");
-  lines.forEach((linha, index) => {
-    if (!/^\d+/.test(linha.trim())) {
-      console.log(`Erro: A linha ${index + 1} não começa com um número.`);
+  lines.forEach((line, index) => {
+    if (!/^\d+/.test(line.trim())) {
+      console.error(`Error: Line ${index + 1} does not start with a number.`);
     }
 
-    const tokens = lexer.analise(linha);
-    const numeroLinha = parseInt(tokens[0].value);
-    if (linhasProcessadas.has(numeroLinha)) {
-      console.log(`Erro: A linha ${numeroLinha} já foi usada.`);
+    const tokens = lexer.analyze(line);
+    const lineNumber = parseInt(tokens[0].value);
+
+    if (processedLines.has(lineNumber)) {
+      console.error(`Error: Line ${lineNumber} has already been used.`);
     }
 
-    if (numeroLinha <= ultimaLinha) {
-      console.log(
-        `Erro: A linha ${numeroLinha} está fora de ordem. Deve ser maior que a linha ${ultimaLinha}.`
+    if (lineNumber <= lastLine) {
+      console.error(
+        `Error: Line ${lineNumber} is out of order. Should be greater than line ${lastLine}.`
       );
     }
 
-    linhasProcessadas.add(numeroLinha);
-    ultimaLinha = numeroLinha;
+    processedLines.add(lineNumber);
+    lastLine = lineNumber;
 
     if (
-      tokens.some((token) => token.tipo === "PALAVRA" && token.value === "end")
+      tokens.some(
+        (token) => token.category === "KEYWORD" && token.value === "end"
+      )
     ) {
-      encontrouEnd = true;
-    } else if (encontrouEnd) {
-      console.log(
-        `Erro: O comando "end" deve ser a última linha do programa.`,
-        tokens[index],
-        "linha",
-        linhaNumero
+      foundEnd = true;
+    } else if (foundEnd) {
+      console.error(
+        `Error: The "end" command must be the last line of the program, found issue in line ${lineNumber}.`
       );
     }
 
-    linhasValidas.push(numeroLinha);
+    validLines.push(lineNumber);
   });
 
-  if (!encontrouEnd) {
-    console.log(
-      `Erro: O programa deve terminar com o comando "end".`,
-      tokens[index],
-      "linha",
-      linhaNumero
-    );
+  if (!foundEnd) {
+    console.error(`Error: The program must end with the "end" command.`);
   }
 
-  const sintaxe = AnalisadorSintatico(linhasValidas);
-  const semantico = AnalisadorSemantico();
+  const syntaxAnalyzer = new SyntacticAnalyzer(validLines);
+  const semanticAnalyzer = new SemanticAnalyzer();
 
-  lines.forEach((linha) => {
+  lines.forEach((line) => {
     try {
-      const tokens = lexer.analise(linha);
-      const ast = sintaxe.analise(tokens);
-      semantico.analise(ast);
+      const tokens = lexer.analyze(line);
+      const ast = syntaxAnalyzer.analyze(tokens);
+      semanticAnalyzer.analyze(ast);
     } catch (error) {
-      console.log(error.message);
+      console.error(error.message);
     }
   });
 }
