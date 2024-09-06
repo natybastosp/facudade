@@ -1,16 +1,6 @@
-````markdown
 # Analisador e Compilador de Código
 
 Este projeto consiste em um analisador léxico, sintático e semântico para um conjunto específico de instruções de um programa de código. Abaixo está uma explicação de cada parte do código.
-
-## Importação de Módulos
-
-```javascript
-const fs = require("fs");
-```
-````
-
-Importa o módulo `fs` para leitura de arquivos.
 
 ## Analisador Léxico
 
@@ -227,3 +217,7 @@ function compile(filename) {
 Lê o código, valida e compila cada linha, reportando erros encontrados.
 
 ---
+
+```
+
+```
