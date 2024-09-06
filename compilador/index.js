@@ -32,7 +32,7 @@ function AnalisadorLexico() {
     while (linha.length > 0) {
       const token = obterProximoToken(linha);
       if (!token) {
-        throw new Error(`Token não reconhecido na linha: ${linha}`);
+        console.error(`Token não reconhecido na linha: ${linha}`);
       }
 
       // Ignorar espaços
@@ -90,7 +90,7 @@ function AnalisadorSintatico(linhasValidas) {
     if (statementHandlers[statement]) {
       return statementHandlers[statement](tokens, index + 1, linhaNumero);
     } else {
-      throw new Error(
+      console.error(
         "Erro sintático: instrução inválida ou palavra-chave desconhecida."
       );
     }
@@ -114,15 +114,11 @@ function AnalisadorSintatico(linhasValidas) {
               expressao.length === 0 ||
               expressao[expressao.length - 1].tipo === "OPERADOR_MATEMATICO"
             ) {
-              throw new Error(
-                "Erro sintático: Operador sem operandos válidos."
-              );
+              console.error("Erro sintático: Operador sem operandos válidos.");
             }
             expressao.push(token);
           } else {
-            throw new Error(
-              "Erro sintático: Token inesperado na expressão LET."
-            );
+            console.error("Erro sintático: Token inesperado na expressão LET.");
           }
           index++;
         }
@@ -131,19 +127,17 @@ function AnalisadorSintatico(linhasValidas) {
           expressao.length > 0 &&
           expressao[expressao.length - 1].tipo === "OPERADOR_MATEMATICO"
         ) {
-          throw new Error(
+          console.error(
             "Erro sintático: Expressão não pode terminar com um operador."
           );
         }
 
         return { tipo: "LET", identificador, expressao, linhaNumero };
       } else {
-        throw new Error(
-          "Erro sintático: Faltando operador '=' após a variável."
-        );
+        console.error("Erro sintático: Faltando operador '=' após a variável.");
       }
     } else {
-      throw new Error("Erro sintático: Esperado identificador após LET.");
+      console.error("Erro sintático: Esperado identificador após LET.");
     }
   }
 
@@ -152,7 +146,7 @@ function AnalisadorSintatico(linhasValidas) {
       (token, i) => token.value.toUpperCase() === "THEN" && i > index
     );
     if (thenIndex === -1) {
-      throw new Error(
+      console.error(
         "Erro sintático: falta a palavra-chave THEN na instrução IF."
       );
     }
@@ -160,9 +154,7 @@ function AnalisadorSintatico(linhasValidas) {
     const condition = tokens.slice(index, thenIndex);
     const gotoLine = tokens[thenIndex + 1].value;
     if (!linhasValidas.includes(gotoLine)) {
-      throw new Error(
-        `Erro sintático: linha de destino ${gotoLine} não existe.`
-      );
+      console.error(`Erro sintático: linha de destino ${gotoLine} não existe.`);
     }
 
     return { tipo: "IF", condition, gotoLine, linhaNumero };
@@ -171,9 +163,7 @@ function AnalisadorSintatico(linhasValidas) {
   function analisarGoto(tokens, index, linhaNumero) {
     const gotoLine = tokens[index].value;
     if (!linhasValidas.includes(gotoLine)) {
-      throw new Error(
-        `Erro sintático: linha de destino ${gotoLine} não existe.`
-      );
+      console.error(`Erro sintático: linha de destino ${gotoLine} não existe.`);
     }
     return { tipo: "GOTO", gotoLine, linhaNumero };
   }
@@ -182,7 +172,7 @@ function AnalisadorSintatico(linhasValidas) {
     if (tokens[index].tipo === "IDENTIFICADOR") {
       return { tipo: "PRINT", identificador: tokens[index].value, linhaNumero };
     } else {
-      throw new Error("Erro sintático na instrução PRINT.");
+      console.error("Erro sintático na instrução PRINT.");
     }
   }
 
@@ -190,7 +180,7 @@ function AnalisadorSintatico(linhasValidas) {
     if (tokens[index].tipo === "IDENTIFICADOR") {
       return { tipo: "INPUT", identificador: tokens[index].value, linhaNumero };
     } else {
-      throw new Error("Erro sintático na instrução INPUT.");
+      console.error("Erro sintático na instrução INPUT.");
     }
   }
 
@@ -211,7 +201,7 @@ function AnalisadorSemantico() {
         return true;
       case "PRINT":
         if (!variaveis[ast.identificador]) {
-          throw new Error(
+          console.error(
             `Erro semântico: A variável "${ast.identificador}" não foi definida.`
           );
         }
@@ -224,7 +214,7 @@ function AnalisadorSemantico() {
   function verificaExpressao(expressao) {
     expressao.forEach((token) => {
       if (token.tipo === "IDENTIFICADOR" && !variaveis[token.value]) {
-        throw new Error(
+        console.error(
           `Erro semântico: A variável "${token.value}" usada na expressão não foi definida.`
         );
       }
@@ -244,18 +234,18 @@ function compile(filename) {
   const lines = fs.readFileSync(filename, "utf8").split("\n");
   lines.forEach((linha, index) => {
     if (!/^\d+/.test(linha.trim())) {
-      throw new Error(`Erro: A linha ${index + 1} não começa com um número.`);
+      console.error(`Erro: A linha ${index + 1} não começa com um número.`);
     }
 
     const tokens = lexer.analise(linha);
     const numeroLinha = parseInt(tokens[0].value);
 
     if (linhasProcessadas.has(numeroLinha)) {
-      throw new Error(`Erro: A linha ${numeroLinha} já foi usada.`);
+      console.error(`Erro: A linha ${numeroLinha} já foi usada.`);
     }
 
     if (numeroLinha <= ultimaLinha) {
-      throw new Error(
+      console.error(
         `Erro: A linha ${numeroLinha} está fora de ordem. Deve ser maior que a linha ${ultimaLinha}.`
       );
     }
@@ -268,7 +258,7 @@ function compile(filename) {
     ) {
       encontrouEnd = true;
     } else if (encontrouEnd) {
-      throw new Error(
+      console.error(
         `Erro: O comando "end" deve ser a última linha do programa.`
       );
     }
@@ -277,7 +267,7 @@ function compile(filename) {
   });
 
   if (!encontrouEnd) {
-    throw new Error(`Erro: O programa deve terminar com o comando "end".`);
+    console.error(`Erro: O programa deve terminar com o comando "end".`);
   }
 
   const sintaxe = AnalisadorSintatico(linhasValidas);
