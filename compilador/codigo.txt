@@ -1,0 +1,7 @@
+10 rem Este é um comentário
+20 let x = 10
+30 let y = 20
+40 if x < y then goto 60
+50 print x
+60 print y
+70 end
