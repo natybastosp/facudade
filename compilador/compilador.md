@@ -217,7 +217,3 @@ function compile(filename) {
 Lê o código, valida e compila cada linha, reportando erros encontrados.
 
 ---
-
-```
-
-```
