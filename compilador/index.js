@@ -60,7 +60,8 @@ class Lexer {
         });
         this.position++;
         this.column++;
-      } else if (["+", "-", "*", "/"].includes(char)) {
+      } else if (["+", "-", "*", "/", ">", "<"].includes(char)) {
+        // tenho que adicionar para reconhecer o < e >
         this.tokens.push({
           type: "OPERATOR",
           value: char,
@@ -109,7 +110,7 @@ class Lexer {
       this.position++;
       this.column++;
     }
-    const keywords = ["rem", "input", "let", "print", "end"];
+    const keywords = ["rem", "input", "let", "print", "end", "goto", "then"]; //goto, if , then
     return {
       type: keywords.includes(identifier) ? "KEYWORD" : "IDENTIFIER",
       value: identifier,
@@ -432,5 +433,4 @@ function compile(filename) {
   }
 }
 
-// Exemplo de execução
 console.log(compile("entrada.txt"));
