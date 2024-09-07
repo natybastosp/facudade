@@ -1,323 +1,436 @@
-/*
-Juliana Alves Pacheco 2122082026
-Natalia Baastos Pereira 2212082020
-*/
-
 const fs = require("fs");
 
-// Analisador Léxico
-class LexicalAnalyzer {
-  constructor() {
-    this.tokenDefinitions = [
-      { category: "LINE_NUMBER", pattern: /^\d+/ },
-      { category: "KEYWORD", pattern: /\b(rem|input|let|if|goto|print|end)\b/ },
-      {
-        category: "IDENTIFIER",
-        pattern:
-          /[a-zA-ZçãõâêîôûáéíóúàèìòùÇÃÕÂÊÎÔÛÁÉÍÓÚÀÈÌÒÙ][a-zA-Z0-9çãõâêîôûáéíóúàèìòùÇÃÕÂÊÎÔÛÁÉÍÓÚÀÈÌÒÙ]*/,
-      },
-      { category: "NUMBER", pattern: /^\d+/ },
-      { category: "ASSIGN_OPERATOR", pattern: /^=/ },
-      { category: "MATH_OPERATOR", pattern: /^[+\-*/%]/ },
-      { category: "WHITESPACE", pattern: /^\s+/ },
-    ];
-  }
-
-  extractNextToken(line) {
-    for (let def of this.tokenDefinitions) {
-      const match = line.match(def.pattern);
-      if (match) {
-        return { category: def.category, value: match[0] };
-      }
-    }
-    return null;
-  }
-
-  analyze(line) {
-    let tokens = [];
-    let awaitingAssignment = false;
-
-    while (line.length > 0) {
-      const token = this.extractNextToken(line);
-
-      if (!token) {
-        this.displayError(`Unrecognized token in line: ${line}`);
-        break;
-      }
-
-      if (token.category === "WHITESPACE") {
-        line = line.slice(token.value.length);
-        continue;
-      }
-
-      tokens.push({ category: token.category, value: token.value });
-      line = line.slice(token.value.length);
-
-      if (token.category === "KEYWORD" && token.value.toLowerCase() === "let") {
-        awaitingAssignment = true;
-      }
-
-      if (token.category === "KEYWORD" && token.value.toLowerCase() === "rem") {
-        return tokens;
-      }
-    }
-
-    return tokens;
-  }
-
-  displayError(message) {
-    console.error(`Error: ${message}`);
+// Classes de erros personalizadas para capturar diferentes tipos de erros
+class LexerError extends Error {
+  constructor(message, line, column) {
+    super(`Erro Léxico: ${message} na linha ${line}, coluna ${column}`);
+    this.name = "LexerError";
   }
 }
 
-// Analisador Sintático
-class SyntacticAnalyzer {
-  constructor(validLines) {
-    this.statementHandlers = {
-      LET: this.processLet.bind(this),
-      IF: this.processIf.bind(this),
-      GOTO: this.processGoto.bind(this),
-      PRINT: this.processPrint.bind(this),
-      INPUT: this.processInput.bind(this),
-      REM: () => ({ type: "REM" }),
-      END: () => ({ type: "END" }),
-    };
-    this.validLines = validLines;
+class ParserError extends Error {
+  constructor(message, line) {
+    super(`Erro Sintático: ${message} na linha ${line}`);
+    this.name = "ParserError";
+  }
+}
+
+class SemanticError extends Error {
+  constructor(message) {
+    super(`Erro Semântico: ${message}`);
+    this.name = "SemanticError";
+  }
+}
+
+// Classe Lexer responsável por tokenizar a entrada
+class Lexer {
+  constructor(input) {
+    this.input = input;
+    this.position = 0;
+    this.line = 1;
+    this.column = 1;
+    this.tokens = [];
   }
 
-  analyze(tokens) {
-    let index = 0;
-    const lineNumber = tokens[index].value;
-    index++;
-
-    const statementToken = tokens[index];
-    const statement = statementToken.value.toUpperCase();
-
-    if (this.statementHandlers[statement]) {
-      return this.statementHandlers[statement](tokens, index + 1, lineNumber);
-    } else {
-      this.displayError(
-        `Syntax Error: Invalid statement or unknown keyword in line ${lineNumber}.`
-      );
-    }
-  }
-
-  processLet(tokens, index, lineNumber) {
-    if (tokens[index].category === "IDENTIFIER") {
-      const identifier = tokens[index].value;
-      index++;
-
-      if (
-        tokens[index].category === "ASSIGN_OPERATOR" &&
-        tokens[index].value === "="
-      ) {
-        index++;
-
-        let expression = [];
-        while (index < tokens.length) {
-          const token = tokens[index];
-
-          if (token.category === "IDENTIFIER" || token.category === "NUMBER") {
-            expression.push(token);
-          } else if (token.category === "MATH_OPERATOR") {
-            if (
-              expression.length === 0 ||
-              expression[expression.length - 1].category === "MATH_OPERATOR"
-            ) {
-              this.displayError(
-                `Syntax Error: Operator without valid operands in line ${lineNumber}.`
-              );
-            }
-            expression.push(token);
-          } else {
-            this.displayError(
-              `Syntax Error: Unexpected token in LET expression in line ${lineNumber}.`
-            );
-          }
-          index++;
-        }
-
-        if (
-          expression.length > 0 &&
-          expression[expression.length - 1].category === "MATH_OPERATOR"
-        ) {
-          this.displayError(
-            `Syntax Error: Expression cannot end with an operator in line ${lineNumber}.`
-          );
-        }
-
-        return { type: "LET", identifier, expression, lineNumber };
+  tokenize() {
+    while (this.position < this.input.length) {
+      const char = this.input[this.position];
+      if (char === "\n") {
+        this.tokens.push({
+          type: "NEWLINE",
+          line: this.line,
+          column: this.column,
+        });
+        this.line++;
+        this.column = 1;
+        this.position++;
+      } else if (/\s/.test(char)) {
+        this.position++;
+        this.column++;
+      } else if (/\d/.test(char)) {
+        this.tokens.push(this.readNumber());
+      } else if (/[a-zA-Z]/.test(char)) {
+        this.tokens.push(this.readIdentifier());
+      } else if (char === "=") {
+        this.tokens.push({
+          type: "EQUALS",
+          value: "=",
+          line: this.line,
+          column: this.column,
+        });
+        this.position++;
+        this.column++;
+      } else if (["+", "-", "*", "/"].includes(char)) {
+        this.tokens.push({
+          type: "OPERATOR",
+          value: char,
+          line: this.line,
+          column: this.column,
+        });
+        this.position++;
+        this.column++;
       } else {
-        this.displayError(
-          `Syntax Error: Missing "=" operator after variable in line ${lineNumber}.`
+        this.tokens.push(this.readComment());
+      }
+    }
+    return this.tokens;
+  }
+
+  readNumber() {
+    let number = "";
+    const startColumn = this.column;
+    while (
+      this.position < this.input.length &&
+      /\d/.test(this.input[this.position])
+    ) {
+      number += this.input[this.position];
+      this.position++;
+      this.column++;
+    }
+    if (isNaN(number)) {
+      throw new LexerError("Número inválido", this.line, startColumn);
+    }
+    return {
+      type: "NUMBER",
+      value: parseInt(number),
+      line: this.line,
+      column: startColumn,
+    };
+  }
+
+  readIdentifier() {
+    let identifier = "";
+    const startColumn = this.column;
+    while (
+      this.position < this.input.length &&
+      /[a-zA-Z0-9]/.test(this.input[this.position])
+    ) {
+      identifier += this.input[this.position];
+      this.position++;
+      this.column++;
+    }
+    const keywords = ["rem", "input", "let", "print", "end"];
+    return {
+      type: keywords.includes(identifier) ? "KEYWORD" : "IDENTIFIER",
+      value: identifier,
+      line: this.line,
+      column: startColumn,
+    };
+  }
+
+  readComment() {
+    let comment = "";
+    const startColumn = this.column;
+    while (
+      this.position < this.input.length &&
+      this.input[this.position] !== "\n"
+    ) {
+      comment += this.input[this.position];
+      this.position++;
+      this.column++;
+    }
+    return {
+      type: "COMMENT",
+      value: comment.trim(),
+      line: this.line,
+      column: startColumn,
+    };
+  }
+}
+
+// Classe Parser para analisar a sequência de tokens e construir a AST
+class Parser {
+  constructor(tokens) {
+    this.tokens = tokens;
+    this.current = 0;
+    this.lastLineNumber = 0;
+  }
+
+  parse() {
+    const program = {
+      type: "Program",
+      body: [],
+    };
+
+    while (!this.isAtEnd()) {
+      try {
+        const stmt = this.parseStatement();
+        if (stmt) {
+          program.body.push(stmt);
+        }
+      } catch (error) {
+        throw new ParserError(error.message, this.peek().line);
+      }
+    }
+
+    return program;
+  }
+
+  parseStatement() {
+    if (this.match("NEWLINE")) {
+      return null; // Ignorar linhas vazias
+    }
+
+    if (this.match("NUMBER")) {
+      const lineNumber = this.previous().value;
+
+      if (lineNumber <= this.lastLineNumber) {
+        throw new Error(
+          `Número da linha ${lineNumber} não está em ordem crescente`
         );
       }
-    } else {
-      this.displayError(
-        `Syntax Error: Expected identifier after LET in line ${lineNumber}.`
-      );
+      this.lastLineNumber = lineNumber;
+
+      if (this.match("KEYWORD")) {
+        const keyword = this.previous().value;
+        switch (keyword) {
+          case "rem":
+            return this.parseComment(lineNumber);
+          case "input":
+            return this.parseInput(lineNumber);
+          case "let":
+            return this.parseAssignment(lineNumber);
+          case "print":
+            return this.parsePrint(lineNumber);
+          case "end":
+            return this.parseEnd(lineNumber);
+          default:
+            throw new Error(`Palavra-chave inesperada: ${keyword}`);
+        }
+      } else if (this.match("IDENTIFIER")) {
+        return this.parseImplicitAssignment(lineNumber);
+      }
     }
+
+    throw new Error(`Token inesperado: ${JSON.stringify(this.peek())}`);
   }
 
-  processIf(tokens, index, lineNumber) {
-    const thenIndex = tokens.findIndex(
-      (token, i) => token.value.toUpperCase() === "THEN" && i > index
+  parseComment(lineNumber) {
+    let commentText = "";
+    while (!this.isAtEnd() && !this.check("NEWLINE")) {
+      commentText += this.advance().value + " ";
+    }
+    return {
+      type: "Comment",
+      value: commentText.trim(),
+      line: lineNumber,
+    };
+  }
+
+  parseInput(lineNumber) {
+    const variable = this.consume(
+      "IDENTIFIER",
+      "Esperado nome da variável após 'input'"
     );
-    if (thenIndex === -1) {
-      this.displayError(
-        `Syntax Error: Missing "THEN" keyword in IF statement in line ${lineNumber}.`
-      );
-    }
-
-    const condition = tokens.slice(index, thenIndex);
-    const gotoLine = tokens[thenIndex + 1].value;
-    if (!this.validLines.includes(gotoLine)) {
-      this.displayError(
-        `Syntax Error: Destination line ${gotoLine} does not exist in line ${lineNumber}.`
-      );
-    }
-
-    return { type: "IF", condition, gotoLine, lineNumber };
+    return {
+      type: "InputStatement",
+      variable: variable.value,
+      line: lineNumber,
+    };
   }
 
-  processGoto(tokens, index, lineNumber) {
-    const gotoLine = tokens[index].value;
-    if (!this.validLines.includes(gotoLine)) {
-      this.displayError(
-        `Syntax Error: Destination line ${gotoLine} does not exist in line ${lineNumber}.`
-      );
-    }
-    return { type: "GOTO", gotoLine, lineNumber };
+  parseAssignment(lineNumber) {
+    const variable = this.consume(
+      "IDENTIFIER",
+      "Esperado nome da variável na atribuição"
+    );
+    this.consume("EQUALS", 'Esperado "=" na atribuição');
+    const value = this.parseExpression();
+    return {
+      type: "AssignmentStatement",
+      variable: variable.value,
+      value: value,
+      line: lineNumber,
+    };
   }
 
-  processPrint(tokens, index, lineNumber) {
-    if (tokens[index].category === "IDENTIFIER") {
-      return { type: "PRINT", identifier: tokens[index].value, lineNumber };
-    } else {
-      this.displayError(
-        `Syntax Error: Invalid PRINT statement in line ${lineNumber}.`
-      );
-    }
+  parseImplicitAssignment(lineNumber) {
+    const variable = this.previous();
+    this.consume("EQUALS", 'Esperado "=" na atribuição');
+    const value = this.parseExpression();
+    return {
+      type: "AssignmentStatement",
+      variable: variable.value,
+      value: value,
+      line: lineNumber,
+    };
   }
 
-  processInput(tokens, index, lineNumber) {
-    if (tokens[index].category === "IDENTIFIER") {
-      return { type: "INPUT", identifier: tokens[index].value, lineNumber };
-    } else {
-      this.displayError(
-        `Syntax Error: Invalid INPUT statement in line ${lineNumber}.`
-      );
-    }
+  parsePrint(lineNumber) {
+    const expression = this.parseExpression();
+    return {
+      type: "PrintStatement",
+      expression: expression,
+      line: lineNumber,
+    };
   }
 
-  displayError(message) {
-    console.error(`Error: ${message}`);
+  parseEnd(lineNumber) {
+    return {
+      type: "EndStatement",
+      line: lineNumber,
+    };
+  }
+
+  parseExpression() {
+    return this.parseAdditive();
+  }
+
+  parseAdditive() {
+    let expr = this.parseMultiplicative();
+
+    while (this.match("OPERATOR", ["+", "-"])) {
+      const operator = this.previous().value;
+      const right = this.parseMultiplicative();
+      expr = {
+        type: "BinaryExpression",
+        operator: operator,
+        left: expr,
+        right: right,
+      };
+    }
+
+    return expr;
+  }
+
+  parseMultiplicative() {
+    let expr = this.parsePrimary();
+
+    while (this.match("OPERATOR", ["*", "/"])) {
+      const operator = this.previous().value;
+      const right = this.parsePrimary();
+      expr = {
+        type: "BinaryExpression",
+        operator: operator,
+        left: expr,
+        right: right,
+      };
+    }
+
+    return expr;
+  }
+
+  parsePrimary() {
+    if (this.match("NUMBER")) {
+      return {
+        type: "Literal",
+        value: this.previous().value,
+      };
+    }
+
+    if (this.match("IDENTIFIER")) {
+      return {
+        type: "Identifier",
+        name: this.previous().value,
+      };
+    }
+
+    throw new Error(`Token inesperado: ${JSON.stringify(this.peek())}`);
+  }
+
+  match(type, values = []) {
+    if (this.check(type, values)) {
+      this.advance();
+      return true;
+    }
+    return false;
+  }
+
+  check(type, values = []) {
+    if (this.isAtEnd()) return false;
+    if (this.peek().type !== type) return false;
+    if (values.length > 0 && !values.includes(this.peek().value)) return false;
+    return true;
+  }
+
+  advance() {
+    if (!this.isAtEnd()) this.current++;
+    return this.previous();
+  }
+
+  consume(type, message) {
+    if (this.check(type)) return this.advance();
+    throw new Error(message);
+  }
+
+  peek() {
+    return this.tokens[this.current];
+  }
+
+  previous() {
+    return this.tokens[this.current - 1];
+  }
+
+  isAtEnd() {
+    return this.current >= this.tokens.length;
   }
 }
 
-// Analisador Semântico
+// Classe SemanticAnalyzer que verifica erros semânticos
 class SemanticAnalyzer {
   constructor() {
-    this.variables = {};
+    this.variables = new Set();
   }
 
   analyze(ast) {
-    switch (ast.type) {
-      case "LET":
-        this.checkExpression(ast.expression);
-        this.variables[ast.identifier] = true;
-        return true;
-      case "INPUT":
-        this.variables[ast.identifier] = true;
-        return true;
-      case "PRINT":
-        if (!this.variables[ast.identifier]) {
-          this.displayError(
-            `Semantic Error: Variable "${ast.identifier}" not defined in line ${ast.lineNumber}.`
-          );
+    this.visitNode(ast);
+  }
+
+  visitNode(node) {
+    switch (node.type) {
+      case "Program":
+        node.body.forEach((stmt) => this.visitNode(stmt));
+        break;
+      case "InputStatement":
+        this.variables.add(node.variable);
+        break;
+      case "AssignmentStatement":
+        this.variables.add(node.variable);
+        this.visitNode(node.value);
+        break;
+      case "PrintStatement":
+        this.visitNode(node.expression);
+        break;
+      case "BinaryExpression":
+        this.visitNode(node.left);
+        this.visitNode(node.right);
+        break;
+      case "Identifier":
+        if (!this.variables.has(node.name)) {
+          throw new SemanticError(`Variável indefinida: ${node.name}`);
         }
-        return true;
+        break;
+      case "Literal":
+      case "Comment":
+      case "EndStatement":
+        break;
       default:
-        return true;
+        throw new SemanticError(`Tipo de nó desconhecido: ${node.type}`);
     }
-  }
-
-  checkExpression(expression) {
-    expression.forEach((token) => {
-      if (token.category === "IDENTIFIER" && !this.variables[token.value]) {
-        this.displayError(
-          `Semantic Error: Variable "${token.value}" used in expression not defined.`
-        );
-      }
-    });
-  }
-
-  displayError(message) {
-    console.error(`Error: ${message}`);
   }
 }
 
-// Função principal de compilação
+// Função principal para compilar o código
 function compile(filename) {
-  const lexer = new LexicalAnalyzer();
-  const validLines = [];
-  const processedLines = new Set();
-  let lastLine = 0;
-  let foundEnd = false;
+  try {
+    const sourceCode = fs.readFileSync(filename, "utf8");
 
-  const lines = fs.readFileSync(filename, "utf8").split("\n");
-  lines.forEach((line, index) => {
-    if (!/^\d+/.test(line.trim())) {
-      console.error(`Error: Line ${index + 1} does not start with a number.`);
-    }
+    const lexer = new Lexer(sourceCode);
+    const tokens = lexer.tokenize();
 
-    const tokens = lexer.analyze(line);
-    const lineNumber = parseInt(tokens[0].value);
+    const parser = new Parser(tokens);
+    const ast = parser.parse();
+    console.log("AST:", JSON.stringify(ast, null, 2));
 
-    if (processedLines.has(lineNumber)) {
-      console.error(`Error: Line ${lineNumber} has already been used.`);
-    }
+    const semanticAnalyzer = new SemanticAnalyzer();
+    semanticAnalyzer.analyze(ast);
+    console.log("Análise semântica concluída sem erros.");
 
-    if (lineNumber <= lastLine) {
-      console.error(
-        `Error: Line ${lineNumber} is out of order. Should be greater than line ${lastLine}.`
-      );
-    }
-
-    processedLines.add(lineNumber);
-    lastLine = lineNumber;
-
-    if (
-      tokens.some(
-        (token) => token.category === "KEYWORD" && token.value === "end"
-      )
-    ) {
-      foundEnd = true;
-    } else if (foundEnd) {
-      console.error(
-        `Error: The "end" command must be the last line of the program, found issue in line ${lineNumber}.`
-      );
-    }
-
-    validLines.push(lineNumber);
-  });
-
-  if (!foundEnd) {
-    console.error(`Error: The program must end with the "end" command.`);
+    return "Compilação bem-sucedida!";
+  } catch (error) {
+    return `Erro de compilação: ${error.name} - ${error.message}`;
   }
-
-  const syntaxAnalyzer = new SyntacticAnalyzer(validLines);
-  const semanticAnalyzer = new SemanticAnalyzer();
-
-  lines.forEach((line) => {
-    try {
-      const tokens = lexer.analyze(line);
-      const ast = syntaxAnalyzer.analyze(tokens);
-      semanticAnalyzer.analyze(ast);
-    } catch (error) {
-      console.error(error.message);
-    }
-  });
 }
 
-compile("entrada.txt");
+// Exemplo de execução
+console.log(compile("entrada.txt"));
