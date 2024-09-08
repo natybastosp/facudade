@@ -58,10 +58,28 @@ class Lexer {
         });
         this.position++;
         this.column++;
-      } else if (["+", "-", "*", "/", ">", "<"].includes(char)) {
+      } else if (["+", "-", "*", "/"].includes(char)) {
         this.tokens.push({
           type: "OPERATOR",
           value: char,
+          line: this.line,
+          column: this.column,
+        });
+        this.position++;
+        this.column++;
+      } else if (["<", ">"].includes(char)) {
+        let value = char;
+        if (
+          this.position + 1 < this.input.length &&
+          this.input[this.position + 1] === "="
+        ) {
+          value += "=";
+          this.position++;
+          this.column++;
+        }
+        this.tokens.push({
+          type: "COMPARISON",
+          value: value,
           line: this.line,
           column: this.column,
         });
@@ -114,7 +132,6 @@ class Lexer {
       this.column++;
     }
 
-    // Convertendo para minúsculas para lidar com palavras-chave case-insensitive
     const normalizedIdentifier = identifier.toLowerCase();
 
     const keywords = [
@@ -128,12 +145,21 @@ class Lexer {
       "then",
     ];
 
-    return {
-      type: keywords.includes(normalizedIdentifier) ? "KEYWORD" : "IDENTIFIER",
-      value: identifier, // Mantém o valor original para variáveis case-sensitive
-      line: this.line,
-      column: startColumn,
-    };
+    if (keywords.includes(normalizedIdentifier)) {
+      return {
+        type: "KEYWORD",
+        value: identifier,
+        line: this.line,
+        column: startColumn,
+      };
+    } else {
+      return {
+        type: "IDENTIFIER",
+        value: identifier,
+        line: this.line,
+        column: startColumn,
+      };
+    }
   }
 
   readComment() {
@@ -180,6 +206,17 @@ class Parser {
       }
     }
 
+    // Verifica se o último comando é um 'EndStatement'
+    if (
+      program.body.length === 0 ||
+      program.body[program.body.length - 1].type !== "EndStatement"
+    ) {
+      throw new ParserError(
+        "Falta o comando 'end' no final do programa",
+        this.lastLineNumber
+      );
+    }
+
     return program;
   }
 
@@ -199,7 +236,7 @@ class Parser {
       this.lastLineNumber = lineNumber;
 
       if (this.match("KEYWORD")) {
-        const keyword = this.previous().value.toLowerCase(); // Convertendo para minúsculas para palavras-chave
+        const keyword = this.previous().value.toLowerCase();
         switch (keyword) {
           case "rem":
             return this.parseComment(lineNumber);
@@ -211,11 +248,15 @@ class Parser {
             return this.parsePrint(lineNumber);
           case "end":
             return this.parseEnd(lineNumber);
+          case "if":
+            return this.parseIf(lineNumber);
+          case "goto":
+            return this.parseGoto(lineNumber);
           default:
             throw new Error(`Palavra-chave inesperada: ${keyword}`);
         }
       } else if (this.match("IDENTIFIER")) {
-        return this.parseImplicitAssignment(lineNumber);
+        return this.parseImplicitAssignment(this.previous().value);
       }
     }
 
@@ -261,15 +302,14 @@ class Parser {
     };
   }
 
-  parseImplicitAssignment(lineNumber) {
-    const variable = this.previous();
+  parseImplicitAssignment(variableName) {
     this.consume("EQUALS", 'Esperado "=" na atribuição');
     const value = this.parseExpression();
     return {
       type: "AssignmentStatement",
-      variable: variable.value,
+      variable: variableName,
       value: value,
-      line: lineNumber,
+      line: this.previous().line,
     };
   }
 
@@ -289,6 +329,30 @@ class Parser {
     };
   }
 
+  parseIf(lineNumber) {
+    const condition = this.parseExpression();
+    this.consume("KEYWORD", 'Esperado "THEN" após a condição do IF');
+    const thenBranch = this.parseStatement();
+    return {
+      type: "IfStatement",
+      condition: condition,
+      thenBranch: thenBranch,
+      line: lineNumber,
+    };
+  }
+
+  parseGoto(lineNumber) {
+    const lineNumberToGoto = this.consume(
+      "NUMBER",
+      "Esperado número da linha após 'goto'"
+    );
+    return {
+      type: "GotoStatement",
+      lineNumber: lineNumberToGoto.value,
+      line: lineNumber,
+    };
+  }
+
   parseExpression() {
     return this.parseRelational();
   }
@@ -296,7 +360,7 @@ class Parser {
   parseRelational() {
     let expr = this.parseAdditive();
 
-    while (this.match("OPERATOR", [">", "<"])) {
+    while (this.match("COMPARISON")) {
       const operator = this.previous().value;
       const right = this.parseAdditive();
       expr = {
@@ -311,11 +375,11 @@ class Parser {
   }
 
   parseAdditive() {
-    let expr = this.parseMultiplicative();
+    let expr = this.parseTerm();
 
-    while (this.match("OPERATOR", ["+", "-"])) {
+    while (this.match("OPERATOR")) {
       const operator = this.previous().value;
-      const right = this.parseMultiplicative();
+      const right = this.parseTerm();
       expr = {
         type: "BinaryExpression",
         operator: operator,
@@ -327,24 +391,7 @@ class Parser {
     return expr;
   }
 
-  parseMultiplicative() {
-    let expr = this.parsePrimary();
-
-    while (this.match("OPERATOR", ["*", "/"])) {
-      const operator = this.previous().value;
-      const right = this.parsePrimary();
-      expr = {
-        type: "BinaryExpression",
-        operator: operator,
-        left: expr,
-        right: right,
-      };
-    }
-
-    return expr;
-  }
-
-  parsePrimary() {
+  parseTerm() {
     if (this.match("NUMBER")) {
       return {
         type: "Literal",
@@ -354,37 +401,48 @@ class Parser {
 
     if (this.match("IDENTIFIER")) {
       return {
-        type: "Identifier",
+        type: "Variable",
         name: this.previous().value,
       };
     }
 
-    throw new Error(`Token inesperado: ${JSON.stringify(this.peek())}`);
+    throw new Error(`Expressão inválida na linha ${this.peek().line}`);
   }
 
-  match(type, values = []) {
-    if (this.check(type, values)) {
-      this.advance();
-      return true;
+  consume(type, message) {
+    if (this.check(type)) {
+      return this.advance();
+    }
+
+    throw new Error(message);
+  }
+
+  match(...types) {
+    for (const type of types) {
+      if (this.check(type)) {
+        this.advance();
+        return true;
+      }
     }
     return false;
   }
 
-  check(type, values = []) {
-    if (this.isAtEnd()) return false;
-    if (this.peek().type !== type) return false;
-    if (values.length > 0 && !values.includes(this.peek().value)) return false;
-    return true;
+  check(type) {
+    if (this.isAtEnd()) {
+      return false;
+    }
+    return this.peek().type === type;
   }
 
   advance() {
-    if (!this.isAtEnd()) this.current++;
+    if (!this.isAtEnd()) {
+      this.current++;
+    }
     return this.previous();
   }
 
-  consume(type, message) {
-    if (this.check(type)) return this.advance();
-    throw new Error(message);
+  isAtEnd() {
+    return this.current >= this.tokens.length;
   }
 
   peek() {
@@ -394,83 +452,18 @@ class Parser {
   previous() {
     return this.tokens[this.current - 1];
   }
-
-  isAtEnd() {
-    return this.current >= this.tokens.length;
-  }
 }
 
-class SemanticAnalyzer {
-  constructor() {
-    this.variables = new Set();
-  }
+try {
+  const input = fs.readFileSync("entrada.txt", "utf-8");
+  const lexer = new Lexer(input);
+  const tokens = lexer.tokenize();
 
-  analyze(ast) {
-    this.visitNode(ast);
-  }
+  const parser = new Parser(tokens);
+  const program = parser.parse();
 
-  visitNode(node) {
-    switch (node.type) {
-      case "Program":
-        node.body.forEach((stmt) => this.visitNode(stmt));
-        break;
-      case "InputStatement":
-        this.variables.add(node.variable);
-        break;
-      case "AssignmentStatement":
-        this.variables.add(node.variable);
-        this.visitNode(node.value);
-        break;
-      case "PrintStatement":
-        this.visitNode(node.expression);
-        break;
-      case "BinaryExpression":
-        this.visitNode(node.left);
-        this.visitNode(node.right);
-        break;
-      case "Identifier":
-        if (!this.variables.has(node.name)) {
-          throw new SemanticError(`Variável indefinida: ${node.name}`);
-        }
-        break;
-      case "Literal":
-      case "Comment":
-      case "EndStatement":
-        break;
-      default:
-        throw new SemanticError(`Tipo de nó desconhecido: ${node.type}`);
-    }
-  }
+  console.log("Tokens:", tokens);
+  console.log("Árvore Sintática:", JSON.stringify(program, null, 2));
+} catch (error) {
+  console.error(error.message);
 }
-
-function compile(filename) {
-  try {
-    const sourceCode = fs.readFileSync(filename, "utf8");
-
-    const lexer = new Lexer(sourceCode);
-    const tokens = lexer.tokenize();
-    console.log("Tokens:", JSON.stringify(tokens, null, 2));
-
-    const parser = new Parser(tokens);
-    const ast = parser.parse();
-    console.log("AST:", JSON.stringify(ast, null, 2));
-
-    const semanticAnalyzer = new SemanticAnalyzer();
-    semanticAnalyzer.analyze(ast);
-    console.log("Análise semântica concluída sem erros.");
-
-    return "Compilação bem-sucedida!";
-  } catch (error) {
-    if (error instanceof LexerError) {
-      return `Erro Léxico: ${error.message}`;
-    } else if (error instanceof ParserError) {
-      return `Erro Sintático: ${error.message}`;
-    } else if (error instanceof SemanticError) {
-      return `Erro Semântico: ${error.message}`;
-    } else {
-      return `Erro de compilação: ${error.name} - ${error.message}`;
-    }
-  }
-}
-
-console.log(compile("entrada.txt"));
