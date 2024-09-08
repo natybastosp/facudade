@@ -256,7 +256,7 @@ class Parser {
             throw new Error(`Palavra-chave inesperada: ${keyword}`);
         }
       } else if (this.match("IDENTIFIER")) {
-        return this.parseImplicitAssignment(this.previous().value);
+        return this.parseImplicitAssignment(lineNumber, this.previous().value);
       }
     }
 
@@ -302,14 +302,14 @@ class Parser {
     };
   }
 
-  parseImplicitAssignment(variableName) {
+  parseImplicitAssignment(lineNumber, variableName) {
     this.consume("EQUALS", 'Esperado "=" na atribuição');
     const value = this.parseExpression();
     return {
       type: "AssignmentStatement",
       variable: variableName,
       value: value,
-      line: this.previous().line,
+      line: lineNumber,
     };
   }
 
@@ -331,14 +331,31 @@ class Parser {
 
   parseIf(lineNumber) {
     const condition = this.parseExpression();
-    this.consume("KEYWORD", 'Esperado "THEN" após a condição do IF');
-    const thenBranch = this.parseStatement();
-    return {
-      type: "IfStatement",
-      condition: condition,
-      thenBranch: thenBranch,
-      line: lineNumber,
-    };
+    if (
+      this.match("KEYWORD") &&
+      this.previous().value.toLowerCase() === "goto"
+    ) {
+      const gotoStatement = this.parseGoto(lineNumber);
+      return {
+        type: "IfGotoStatement",
+        condition: condition,
+        gotoStatement: gotoStatement,
+        line: lineNumber,
+      };
+    } else if (
+      this.match("KEYWORD") &&
+      this.previous().value.toLowerCase() === "then"
+    ) {
+      const thenBranch = this.parseStatement();
+      return {
+        type: "IfThenStatement",
+        condition: condition,
+        thenBranch: thenBranch,
+        line: lineNumber,
+      };
+    } else {
+      throw new Error("Esperado 'GOTO' ou 'THEN' após a condição do IF");
+    }
   }
 
   parseGoto(lineNumber) {
