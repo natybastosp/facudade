@@ -24,7 +24,7 @@ class SemanticError extends Error {
 class Lexer {
   constructor(input) {
     this.input = input;
-    this.position = 0; // Corrigido: removido o 'x'
+    this.position = 0;
     this.line = 1;
     this.column = 1;
     this.tokens = [];
@@ -113,6 +113,10 @@ class Lexer {
       this.position++;
       this.column++;
     }
+
+    // Convertendo para minúsculas para lidar com palavras-chave case-insensitive
+    const normalizedIdentifier = identifier.toLowerCase();
+
     const keywords = [
       "rem",
       "input",
@@ -123,9 +127,10 @@ class Lexer {
       "if",
       "then",
     ];
+
     return {
-      type: keywords.includes(identifier) ? "KEYWORD" : "IDENTIFIER",
-      value: identifier,
+      type: keywords.includes(normalizedIdentifier) ? "KEYWORD" : "IDENTIFIER",
+      value: identifier, // Mantém o valor original para variáveis case-sensitive
       line: this.line,
       column: startColumn,
     };
@@ -194,7 +199,7 @@ class Parser {
       this.lastLineNumber = lineNumber;
 
       if (this.match("KEYWORD")) {
-        const keyword = this.previous().value;
+        const keyword = this.previous().value.toLowerCase(); // Convertendo para minúsculas para palavras-chave
         switch (keyword) {
           case "rem":
             return this.parseComment(lineNumber);
