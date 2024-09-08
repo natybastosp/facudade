@@ -1,8 +1,3 @@
-/* 
-Juliana Alves Pacheco - 2122082026
-Natalia Bastos Pereira - 2212082020
-*/
-
 const fs = require("fs");
 
 class LexerError extends Error {
@@ -90,7 +85,7 @@ class Lexer {
         });
         this.position++;
         this.column++;
-      } else if (char === "r" && this.input.startsWith("rem", this.position)) {
+      } else if (char === "R" && this.input.startsWith("REM", this.position)) {
         this.tokens.push(this.readComment());
       } else {
         throw new LexerError(
@@ -137,20 +132,18 @@ class Lexer {
       this.column++;
     }
 
-    const normalizedIdentifier = identifier.toLowerCase();
-
     const keywords = [
-      "rem",
-      "input",
-      "let",
-      "print",
-      "end",
-      "goto",
-      "if",
-      "then",
+      "REM",
+      "INPUT",
+      "LET",
+      "PRINT",
+      "END",
+      "GOTO",
+      "IF",
+      "THEN",
     ];
 
-    if (keywords.includes(normalizedIdentifier)) {
+    if (keywords.includes(identifier)) {
       return {
         type: "KEYWORD",
         value: identifier,
@@ -211,13 +204,12 @@ class Parser {
       }
     }
 
-    // Verifica se o último comando é um 'EndStatement'
     if (
       program.body.length === 0 ||
       program.body[program.body.length - 1].type !== "EndStatement"
     ) {
       throw new ParserError(
-        "Falta o comando 'end' no final do programa",
+        "Falta o comando 'END' no final do programa",
         this.lastLineNumber
       );
     }
@@ -241,21 +233,21 @@ class Parser {
       this.lastLineNumber = lineNumber;
 
       if (this.match("KEYWORD")) {
-        const keyword = this.previous().value.toLowerCase();
+        const keyword = this.previous().value;
         switch (keyword) {
-          case "rem":
+          case "REM":
             return this.parseComment(lineNumber);
-          case "input":
+          case "INPUT":
             return this.parseInput(lineNumber);
-          case "let":
+          case "LET":
             return this.parseAssignment(lineNumber);
-          case "print":
+          case "PRINT":
             return this.parsePrint(lineNumber);
-          case "end":
+          case "END":
             return this.parseEnd(lineNumber);
-          case "if":
+          case "IF":
             return this.parseIf(lineNumber);
-          case "goto":
+          case "GOTO":
             return this.parseGoto(lineNumber);
           default:
             throw new Error(`Palavra-chave inesperada: ${keyword}`);
@@ -283,7 +275,7 @@ class Parser {
   parseInput(lineNumber) {
     const variable = this.consume(
       "IDENTIFIER",
-      "Esperado nome da variável após 'input'"
+      "Esperado nome da variável após 'INPUT'"
     );
     return {
       type: "InputStatement",
@@ -299,16 +291,6 @@ class Parser {
     );
     this.consume("EQUALS", 'Esperado "=" na atribuição');
     const value = this.parseExpression();
-
-    // Adicionando verificação semântica
-    if (
-      value.type === "BinaryExpression" &&
-      ["<", ">", "<=", ">="].includes(value.operator)
-    ) {
-      throw new SemanticError(
-        `Não é permitido atribuir uma expressão de comparação diretamente a uma variável na linha ${lineNumber}`
-      );
-    }
 
     return {
       type: "AssignmentStatement",
@@ -347,10 +329,7 @@ class Parser {
 
   parseIf(lineNumber) {
     const condition = this.parseExpression();
-    if (
-      this.match("KEYWORD") &&
-      this.previous().value.toLowerCase() === "goto"
-    ) {
+    if (this.match("KEYWORD") && this.previous().value === "GOTO") {
       const gotoStatement = this.parseGoto(lineNumber);
       return {
         type: "IfGotoStatement",
@@ -358,10 +337,7 @@ class Parser {
         gotoStatement: gotoStatement,
         line: lineNumber,
       };
-    } else if (
-      this.match("KEYWORD") &&
-      this.previous().value.toLowerCase() === "then"
-    ) {
+    } else if (this.match("KEYWORD") && this.previous().value === "THEN") {
       const thenBranch = this.parseStatement();
       return {
         type: "IfThenStatement",
@@ -377,7 +353,7 @@ class Parser {
   parseGoto(lineNumber) {
     const lineNumberToGoto = this.consume(
       "NUMBER",
-      "Esperado número da linha após 'goto'"
+      "Esperado número da linha após 'GOTO'"
     );
     return {
       type: "GotoStatement",
@@ -487,6 +463,51 @@ class Parser {
   }
 }
 
+class SemanticAnalyzer {
+  constructor() {
+    this.symbolTable = new Set();
+  }
+
+  analyze(program) {
+    for (const statement of program.body) {
+      this.analyzeStatement(statement);
+    }
+  }
+
+  analyzeStatement(statement) {
+    switch (statement.type) {
+      case "InputStatement":
+      case "AssignmentStatement":
+        this.symbolTable.add(statement.variable);
+        if (statement.type === "AssignmentStatement") {
+          this.analyzeExpression(statement.value);
+        }
+        break;
+      case "PrintStatement":
+        this.analyzeExpression(statement.expression);
+        break;
+      case "IfGotoStatement":
+      case "IfThenStatement":
+        this.analyzeExpression(statement.condition);
+        if (statement.type === "IfThenStatement") {
+          this.analyzeStatement(statement.thenBranch);
+        }
+        break;
+    }
+  }
+
+  analyzeExpression(expression) {
+    if (expression.type === "Variable") {
+      if (!this.symbolTable.has(expression.name)) {
+        throw new SemanticError(`Variável não definida: ${expression.name}`);
+      }
+    } else if (expression.type === "BinaryExpression") {
+      this.analyzeExpression(expression.left);
+      this.analyzeExpression(expression.right);
+    }
+  }
+}
+
 try {
   const input = fs.readFileSync("entrada.txt", "utf-8");
   const lexer = new Lexer(input);
@@ -495,8 +516,20 @@ try {
   const parser = new Parser(tokens);
   const program = parser.parse();
 
+  const semanticAnalyzer = new SemanticAnalyzer();
+  semanticAnalyzer.analyze(program);
+
   console.log("Tokens:", tokens);
   console.log("Árvore Sintática:", JSON.stringify(program, null, 2));
+  console.log("Análise semântica concluída com sucesso.");
 } catch (error) {
-  console.error(error.message);
+  if (error instanceof SemanticError) {
+    console.error("Erro Semântico:", error.message);
+  } else if (error instanceof ParserError) {
+    console.error("Erro Sintático:", error.message);
+  } else if (error instanceof LexerError) {
+    console.error("Erro Léxico:", error.message);
+  } else {
+    console.error("Erro desconhecido:", error.message);
+  }
 }
