@@ -294,6 +294,17 @@ class Parser {
     );
     this.consume("EQUALS", 'Esperado "=" na atribuição');
     const value = this.parseExpression();
+
+    // Adicionando verificação semântica
+    if (
+      value.type === "BinaryExpression" &&
+      ["<", ">", "<=", ">="].includes(value.operator)
+    ) {
+      throw new SemanticError(
+        `Não é permitido atribuir uma expressão de comparação diretamente a uma variável na linha ${lineNumber}`
+      );
+    }
+
     return {
       type: "AssignmentStatement",
       variable: variable.value,
