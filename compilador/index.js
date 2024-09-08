@@ -1,6 +1,5 @@
 const fs = require("fs");
 
-// Classes de erros personalizadas para capturar diferentes tipos de erros
 class LexerError extends Error {
   constructor(message, line, column) {
     super(`Erro Léxico: ${message} na linha ${line}, coluna ${column}`);
@@ -22,11 +21,10 @@ class SemanticError extends Error {
   }
 }
 
-// Classe Lexer responsável por tokenizar a entrada
 class Lexer {
   constructor(input) {
     this.input = input;
-    this.position = 0;
+    this.position = 0; // Corrigido: removido o 'x'
     this.line = 1;
     this.column = 1;
     this.tokens = [];
@@ -61,7 +59,6 @@ class Lexer {
         this.position++;
         this.column++;
       } else if (["+", "-", "*", "/", ">", "<"].includes(char)) {
-        // tenho que adicionar para reconhecer o < e >
         this.tokens.push({
           type: "OPERATOR",
           value: char,
@@ -70,8 +67,14 @@ class Lexer {
         });
         this.position++;
         this.column++;
-      } else {
+      } else if (char === "r" && this.input.startsWith("rem", this.position)) {
         this.tokens.push(this.readComment());
+      } else {
+        throw new LexerError(
+          `Caractere não reconhecido: ${char}`,
+          this.line,
+          this.column
+        );
       }
     }
     return this.tokens;
@@ -110,7 +113,16 @@ class Lexer {
       this.position++;
       this.column++;
     }
-    const keywords = ["rem", "input", "let", "print", "end", "goto", "then"]; //goto, if , then
+    const keywords = [
+      "rem",
+      "input",
+      "let",
+      "print",
+      "end",
+      "goto",
+      "if",
+      "then",
+    ];
     return {
       type: keywords.includes(identifier) ? "KEYWORD" : "IDENTIFIER",
       value: identifier,
@@ -139,7 +151,6 @@ class Lexer {
   }
 }
 
-// Classe Parser para analisar a sequência de tokens e construir a AST
 class Parser {
   constructor(tokens) {
     this.tokens = tokens;
@@ -169,7 +180,7 @@ class Parser {
 
   parseStatement() {
     if (this.match("NEWLINE")) {
-      return null; // Ignorar linhas vazias
+      return null;
     }
 
     if (this.match("NUMBER")) {
@@ -274,7 +285,24 @@ class Parser {
   }
 
   parseExpression() {
-    return this.parseAdditive();
+    return this.parseRelational();
+  }
+
+  parseRelational() {
+    let expr = this.parseAdditive();
+
+    while (this.match("OPERATOR", [">", "<"])) {
+      const operator = this.previous().value;
+      const right = this.parseAdditive();
+      expr = {
+        type: "BinaryExpression",
+        operator: operator,
+        left: expr,
+        right: right,
+      };
+    }
+
+    return expr;
   }
 
   parseAdditive() {
@@ -367,7 +395,6 @@ class Parser {
   }
 }
 
-// Classe SemanticAnalyzer que verifica erros semânticos
 class SemanticAnalyzer {
   constructor() {
     this.variables = new Set();
@@ -411,13 +438,13 @@ class SemanticAnalyzer {
   }
 }
 
-// Função principal para compilar o código
 function compile(filename) {
   try {
     const sourceCode = fs.readFileSync(filename, "utf8");
 
     const lexer = new Lexer(sourceCode);
     const tokens = lexer.tokenize();
+    console.log("Tokens:", JSON.stringify(tokens, null, 2));
 
     const parser = new Parser(tokens);
     const ast = parser.parse();
@@ -429,7 +456,15 @@ function compile(filename) {
 
     return "Compilação bem-sucedida!";
   } catch (error) {
-    return `Erro de compilação: ${error.name} - ${error.message}`;
+    if (error instanceof LexerError) {
+      return `Erro Léxico: ${error.message}`;
+    } else if (error instanceof ParserError) {
+      return `Erro Sintático: ${error.message}`;
+    } else if (error instanceof SemanticError) {
+      return `Erro Semântico: ${error.message}`;
+    } else {
+      return `Erro de compilação: ${error.name} - ${error.message}`;
+    }
   }
 }
 
