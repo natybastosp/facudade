@@ -1,70 +1,75 @@
-# Criptografia com Substituição Polialfabética e Transposição Colunar
+# Vigenère and Columnar Transposition Cipher
 
-## Introdução
+This program implements a two-step encryption process using the Vigenère cipher followed by a columnar transposition cipher. It provides a command-line interface for users to encrypt and decrypt messages.
 
-Este projeto implementa um modelo de criptografia que combina duas técnicas clássicas: **Substituição Polialfabética** e **Transposição Colunar**. A junção dessas duas técnicas torna a criptografia mais robusta, dificultando ataques simples como força bruta.
+## Table of Contents
 
-### 1. Substituição Polialfabética (Cifra de Vigenère)
+1. [Overview](#overview)
+2. [Encryption Process](#encryption-process)
+3. [Decryption Process](#decryption-process)
+4. [Key Generation and Structure](#key-generation-and-structure)
+5. [Code Structure](#code-structure)
+6. [How to Use](#how-to-use)
 
-A **Cifra de Vigenère** é um método de substituição polialfabética, onde cada letra da mensagem original (texto claro) é substituída por uma outra letra, de acordo com uma chave que determina o deslocamento de cada letra. Diferente de uma cifra de César (que usa um único deslocamento para todas as letras), a cifra de Vigenère utiliza deslocamentos diferentes para cada posição no texto.
+## Overview
 
-#### Como funciona:
+This program combines two classical ciphers to create a more secure encryption:
 
-- Para cada letra do texto claro, uma letra da chave é usada para determinar o quanto essa letra será deslocada no alfabeto.
-- A chave é repetida ciclicamente ao longo do texto, de modo que diferentes partes do texto são criptografadas com diferentes deslocamentos.
+1. **Vigenère Cipher**: A polyalphabetic substitution cipher.
+2. **Columnar Transposition Cipher**: A transposition cipher that rearranges the letters of the message.
 
-**Exemplo**:
+The program provides a menu-driven interface for users to encrypt messages, decrypt messages, or exit the program.
 
-- Texto Claro: `"HELLO"`
-- Chave: `"KEY"`
-  - 'K' indica um deslocamento de 10 posições no alfabeto (letra 'K' é a 11ª letra do alfabeto).
-  - 'E' indica um deslocamento de 4 posições.
-  - 'Y' indica um deslocamento de 24 posições.
-- Aplicando os deslocamentos:
-  - 'H' se torna 'R' (deslocado por 10).
-  - 'E' se torna 'I' (deslocado por 4).
-  - 'L' se torna 'J' (deslocado por 24).
-  - 'L' se torna 'V' (novamente deslocado por 10).
-  - 'O' se torna 'S' (deslocado por 4).
+## Encryption Process
 
-Resultado criptografado: `"RIJVS"`.
+1. The user enters a plaintext message.
+2. A key is automatically generated, which includes:
+   - A Vigenère key
+   - The number of columns for the transposition
+   - The column order for the transposition
+3. The plaintext is encrypted using the Vigenère cipher.
+4. The result is then encrypted again using the columnar transposition cipher.
+5. The final ciphertext and the full key are displayed to the user.
 
-### 2. Transposição Colunar
+## Decryption Process
 
-Após a substituição polialfabética, aplicamos a **Transposição Colunar**, que rearranja os caracteres do texto criptografado para adicionar mais uma camada de segurança. Essa técnica envolve organizar o texto em uma grade de colunas e, em seguida, embaralhar a ordem das colunas com base em uma chave de transposição.
+1. The user enters the ciphertext and the full key.
+2. The key is parsed to extract the Vigenère key, number of columns, and column order.
+3. The columnar transposition is reversed first.
+4. The result is then decrypted using the Vigenère cipher.
+5. The original plaintext is displayed to the user.
 
-#### Como funciona:
+## Key Generation and Structure
 
-1. O texto criptografado pela cifra de Vigenère é dividido em uma grade com um número fixo de colunas.
-2. As colunas são rearranjadas de acordo com uma chave que define a nova ordem.
-3. A leitura é feita coluna por coluna na nova ordem, resultando no texto final criptografado.
+The key is a single string that contains all necessary information for both encryption and decryption. It has the following structure:
 
-**Exemplo**:
+```
+VigenereKey-NumberOfColumns-ColumnOrder
+```
 
-- Texto criptografado: `"RIJVS"`
-- Dividido em uma grade de 3 colunas:
-  ```
-  R  I  J
-  V  S  X  (adicionamos 'X' como preenchimento)
-  ```
-- Suponha que a chave de transposição seja `[2, 0, 1]`, o que significa que a 3ª coluna será a primeira, a 1ª coluna será a segunda, e a 2ª coluna será a terceira:
-  ```
-  J  R  I
-  X  V  S
-  ```
-- Texto final criptografado: `"JRIXVS"`.
+For example: `HELLO-5-2,0,4,1,3`
 
-### 3. Descriptografia
+- `HELLO` is the Vigenère key
+- `5` is the number of columns for the transposition
+- `2,0,4,1,3` is the order of columns for the transposition
 
-Para descriptografar, o processo é o inverso:
+## Code Structure
 
-1. **Reverter a Transposição Colunar**: Primeiro, reorganizamos as colunas para voltar à ordem original.
-2. **Reverter a Substituição Polialfabética**: Em seguida, aplicamos a chave da cifra de Vigenère para desfazer os deslocamentos e retornar ao texto claro.
+- `keyGeneration()`: Generates a random key with all necessary components.
+- `parseKey()`: Parses the full key into its components.
+- `vigenereEncrypt()` and `vigenereDecrypt()`: Implement the Vigenère cipher.
+- `columnarTranspositionEncrypt()` and `columnarTranspositionDecrypt()`: Implement the columnar transposition cipher.
+- `encrypt()` and `decrypt()`: Combine both ciphers for the full encryption/decryption process.
+- `menu()`, `encryptFlow()`, `decryptFlow()`: Handle the user interface and program flow.
 
----
+## How to Use
 
-## Conclusão
+1. Ensure you have Node.js installed on your system.
+2. Save the code to a file (e.g., `cipher.js`).
+3. Open a terminal and navigate to the directory containing the file.
+4. Run the program using the command: `node cipher.js`
+5. Follow the on-screen prompts to encrypt or decrypt messages.
 
-Este modelo de criptografia é robusto porque combina duas técnicas complementares: substituição polialfabética (que introduz variação nos deslocamentos de cada letra) e transposição colunar (que embaralha o texto). Isso dificulta que um atacante recupere o texto original sem conhecer tanto a chave de substituição quanto a chave de transposição.
+When encrypting, you'll receive a full key. Make sure to save this key securely, as you'll need it to decrypt the message later.
 
----
+Note: This implementation is for educational purposes and may not be suitable for securing sensitive information in real-world applications.
