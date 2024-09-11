@@ -65,9 +65,9 @@ For example: `HELLO-5-2,0,4,1,3`
 ## How to Use
 
 1. Ensure you have Node.js installed on your system.
-2. Save the code to a file (e.g., `cipher.js`).
+2. Save the code to a file (e.g., `index.js`).
 3. Open a terminal and navigate to the directory containing the file.
-4. Run the program using the command: `node cipher.js`
+4. Run the program using the command: `node index.js`
 5. Follow the on-screen prompts to encrypt or decrypt messages.
 
 When encrypting, you'll receive a full key. Make sure to save this key securely, as you'll need it to decrypt the message later.
