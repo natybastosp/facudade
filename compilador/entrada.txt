@@ -1,4 +1,4 @@
 10 LET X = 5
 30 PRINT X
-70 PRINT Y
 80 END
+ 
