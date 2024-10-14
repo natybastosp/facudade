@@ -1,3 +1,5 @@
+binary.txt
+
 +1000 ; input n
 +2001 ; load n
 +3102 ; subtract 0
@@ -17,3 +19,18 @@
 +2103 ; store f
 +1103 ; print f
 +4300 ; halt
+
+
+source.txt
+
+05 rem calcular o fatorial de n
+10 input n
+15 if n < 0 goto 45
+20 let f = 1
+25 if n < 2 goto 50
+30 let f = f * n
+35 let n = n - 1
+40 goto 25
+45 let f = -1
+50 print f
+55 end

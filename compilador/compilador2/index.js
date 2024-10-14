@@ -37,7 +37,11 @@ function compileSimpleToSML(sourceFile, outputFile) {
         }
         const address = variables[variable].toString().padStart(2, "0");
         const opcode = instructionMap[instruction];
-        binaryCode.push(`+${opcode}${address}`);
+        const comment =
+          instruction === "input"
+            ? `; input ${variable}`
+            : `; print ${variable}`;
+        binaryCode.push(`+${opcode}${address} ${comment}`);
       }
 
       // Tratamento de "let" para aritmética
@@ -55,18 +59,22 @@ function compileSimpleToSML(sourceFile, outputFile) {
           }
           const leftAddress = variables[leftVar].toString().padStart(2, "0");
           const rightAddress = variables[rightVar].toString().padStart(2, "0");
-          binaryCode.push(`+20${leftAddress}`); // LOAD f
-          binaryCode.push(`+33${rightAddress}`); // MULT n
-          binaryCode.push(`+21${leftAddress}`); // STORE f
+          binaryCode.push(`+20${leftAddress} ; load ${leftVar}`);
+          binaryCode.push(`+33${rightAddress} ; multiply ${rightVar}`);
+          binaryCode.push(`+21${leftAddress} ; store ${leftVar}`);
         }
 
         // "let f = 1" (atribuição direta)
         else {
           const value = parseInt(operation);
-          binaryCode.push(`+20${value.toString().padStart(4, "0")}`); // Carrega valor direto
           binaryCode.push(
-            `+21${variables[variable].toString().padStart(2, "0")}`
-          ); // Store na variável
+            `+20${value.toString().padStart(4, "0")} ; load value ${value}`
+          );
+          binaryCode.push(
+            `+21${variables[variable]
+              .toString()
+              .padStart(2, "0")} ; store ${variable}`
+          );
         }
       }
 
@@ -85,22 +93,22 @@ function compileSimpleToSML(sourceFile, outputFile) {
         const rightAddress = variables[rightVar].toString().padStart(2, "0");
         const targetLine = parseInt(gotoLine).toString().padStart(2, "0");
 
-        binaryCode.push(`+20${leftAddress}`); // LOAD n
+        binaryCode.push(`+20${leftAddress} ; load ${leftVar}`);
         if (operator === "<") {
-          binaryCode.push(`+31${rightAddress}`); // SUB n
-          binaryCode.push(`+41${targetLine}`); // BRANCHNEG
+          binaryCode.push(`+31${rightAddress} ; subtract ${rightVar}`);
+          binaryCode.push(`+41${targetLine} ; branchneg to line ${gotoLine}`);
         }
       }
 
       // Tratamento de "goto"
       else if (instruction === "goto") {
         const targetLine = parseInt(operand).toString().padStart(2, "0");
-        binaryCode.push(`+40${targetLine}`); // GOTO
+        binaryCode.push(`+40${targetLine} ; goto line ${operand}`);
       }
 
       // Tratamento de "end"
       else if (instruction === "end") {
-        binaryCode.push("+4300"); // HALT
+        binaryCode.push(`+4300 ; halt`);
       }
     });
 
