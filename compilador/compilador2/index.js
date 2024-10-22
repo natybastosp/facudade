@@ -1,3 +1,8 @@
+/* 
+Juliana Alves Pacheco - 2122082026
+Natalia Bastos Pereira - 2212082020
+*/
+
 const fs = require("fs");
 
 // Função que processa o código em SIMPLE e gera o código em SML
