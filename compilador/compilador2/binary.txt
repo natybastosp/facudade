@@ -1,19 +1,19 @@
-+1000 ; input n
-+2001 ; load n
-+3102 ; subtract 0
-+4145 ; branchneg to line 45
-+200001 ; load value 1
-+2103 ; store f
-+2001 ; load n
-+3104 ; subtract 2
-+4150 ; branchneg to line 50
-+2003 ; load f
-+3301 ; multiply n
-+2103 ; store f
-+200NaN ; load value NaN
-+2101 ; store n
-+4025 ; goto line 25
-+2000-1 ; load value -1
-+2103 ; store f
-+1103 ; print f
-+4300 ; halt
++1014
++2014
++4110
++2001
++2115
++2014
++3116
++4212
++2015
++3314
++2115
++2014
++3117
++2114
++4025
++2002
++2115
++1115
++4300
