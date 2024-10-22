@@ -27,46 +27,55 @@ function compile(source) {
     const parts = line.trim().split(" ");
     const command = parts[1]; // O comando (ex: rem, input, etc.)
 
-    // Se o comando for rem (comentário)
-    if (command === "rem") {
-      binaryCode.push(simpleToSML.rem);
-    }
+    switch (command) {
+      case "rem":
+        binaryCode.push(simpleToSML.rem); // Adiciona código de comentário
+        console.log("Comentário:", parts.slice(2).join(" "));
+        break;
 
-    // Processa o comando input
-    if (command === "input") {
-      inputCounter++;
-      binaryCode.push(`+101${inputCounter + 3}`); // +1014 para primeiro input, +1015 para segundo, etc.
-    }
+      case "input":
+        inputCounter++;
+        binaryCode.push(`+101${inputCounter + 3}`); // +1014 para primeiro input, +1015 para segundo, etc.
+        break;
 
-    // Adiciona o código correspondente para outros comandos
-    if (simpleToSML[command] && command !== "input") {
-      binaryCode.push(simpleToSML[command]);
-    }
+      case "let":
+        binaryCode.push(simpleToSML.let); // Adiciona código de let
+        break;
 
-    // Adiciona código para let r = a % b
-    if (command === "let" && parts[1] === "r") {
-      binaryCode.push("+4111"); // Código para let r = a %
-    }
+      case "print":
+        binaryCode.push(simpleToSML.print); // Adiciona código de print
+        break;
 
-    // Adiciona código para let x = p / a
-    if (command === "let" && parts[1] === "x") {
-      binaryCode.push("+4112"); // Código para let x = p /
-    }
+      case "if":
+        binaryCode.push(simpleToSML.if); // Adiciona código de if
+        break;
 
-    // Adiciona código para let c = a + b
-    if (command === "let" && parts[1] === "c") {
-      binaryCode.push("+4110"); // Código para let c = a + b
-    }
+      default:
+        // Gerenciamento de operações
+        if (parts.length > 1) {
+          const operation = parts[1]; // Operação a ser realizada
 
-    // Adiciona código para print c
-    if (command === "print" && parts[1] === "c") {
-      binaryCode.push("+2014"); // Código para print c
+          if (command === "let" && operation === "c") {
+            binaryCode.push(simpleToSML.let); // Código para let
+          }
+
+          if (command === "goto") {
+            binaryCode.push(simpleToSML.goto); // Adiciona código para goto
+          }
+
+          // Verifica se a linha contém um comando de desvio
+          if (command === "if") {
+            binaryCode.push(simpleToSML.if); // Código para if
+            binaryCode.push(simpleToSML.goto); // Código para desvio
+          }
+        }
+        break; // Não faz nada se o comando não for reconhecido
     }
   });
 
   // Adiciona o comando para fim do programa apenas uma vez
   if (!binaryCode.includes(simpleToSML.end)) {
-    binaryCode.push(simpleToSML.end);
+    binaryCode.push(simpleToSML.end); // Adiciona código de fim
   }
 
   return binaryCode.join("\n");
