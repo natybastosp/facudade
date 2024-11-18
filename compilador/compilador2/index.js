@@ -36,7 +36,7 @@ function readSourceCode() {
         };
       });
   } catch (err) {
-    console.error("Erro ao ler o arquivo source.txt:", err);
+    //console.error("Erro ao ler o arquivo source.txt:", err);
     return null;
   }
 }
@@ -55,7 +55,7 @@ function generateSML(sourceCode) {
     const tokens = line.command;
     const command = tokens[0].toLowerCase();
 
-    console.log(`Processando comando: ${command} com tokens: ${tokens}`); // Debug
+    // console.log(`Processando comando: ${command} com tokens: ${tokens}`); // Debug
 
     switch (command) {
       case "rem":
@@ -77,14 +77,24 @@ function generateSML(sourceCode) {
         const op2 = tokens[5];
 
         const varAddr = getVarAddress(varName);
+
+        // Verifica se op1 é um número ou uma variável
         const op1Addr = isNaN(op1) ? getVarAddress(op1) : parseInt(op1);
         let op2Addr;
 
-        // Verifica se o segundo valor é numérico e negativo
-        if (isNaN(op2)) {
-          op2Addr = getVarAddress(op2);
+        // Verifica se op2 está presente
+        if (op2) {
+          // Verifica se op2 é um número negativo
+          if (op2[0] === "-") {
+            op2Addr = parseInt(op2); // Processa números negativos
+          } else if (isNaN(op2)) {
+            op2Addr = getVarAddress(op2);
+          } else {
+            op2Addr = parseInt(op2);
+          }
         } else {
-          op2Addr = parseInt(op2);
+          // Caso op2 não exista, não faz nada
+          op2Addr = 0; // Ou outra lógica de valor padrão para operações sem op2
         }
 
         // Carrega op1 para o acumulador
