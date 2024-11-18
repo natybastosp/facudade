@@ -1,111 +1,216 @@
 const fs = require("fs");
 
-const OPCODES = {
-  READ: 10,
-  WRITE: 11,
-  LOAD: 20,
-  STORE: 21,
-  ADD: 30,
-  SUBTRACT: 31,
-  DIVIDE: 32,
-  MULTIPLY: 33,
-  MODULE: 34,
-  BRANCH: 40,
-  BRANCHNEG: 41,
-  BRANCHZERO: 42,
-  HALT: 43,
-};
-
-// Posições fixas para o programa do fatorial
-const MEMORY = {
-  N: 14, // Variável n
-  F: 15, // Variável f
-  ONE: 15, // Constante 1
-  NEG_ONE: 16, // Constante -1
-};
-
-function readSourceCode() {
-  try {
-    const data = fs.readFileSync("source.txt", "utf8");
-    return data
-      .trim()
-      .split("\n")
-      .map((line) => {
-        const [lineNumber, ...command] = line.trim().split(" ");
-        return {
-          lineNumber: parseInt(lineNumber),
-          command: command.filter((c) => c !== ""),
-        };
-      });
-  } catch (err) {
-    console.error("Erro ao ler o arquivo source.txt:", err);
-    return null;
+class TableEntry {
+  constructor(symbol, type, location) {
+    this.symbol = symbol;
+    this.type = type; // 'C' para constante, 'L' para linha, 'V' para variável
+    this.location = location; // Localização na memória
   }
 }
 
-function generateFactorialSML() {
-  const smlCode = [
-    // 1. Lê o valor de n
-    OPCODES.READ * 100 + MEMORY.N, // +1014
+const symbolTable = [];
+let instructionCounter = 0;
+let dataCounter = 99;
+let memory = Array(100).fill(0);
+let flags = new Map(); // Substituímos o array por um mapa
 
-    // 2. Carrega n e verifica se é negativo
-    OPCODES.LOAD * 100 + MEMORY.N, // +2014
-    OPCODES.BRANCHNEG * 100 + 10, // +4110
-
-    // 3. Verifica se é zero
-    OPCODES.BRANCHZERO * 100 + 12, // +4212
-
-    // 4. Multiplica n pelo fatorial atual
-    OPCODES.MULTIPLY * 100 + MEMORY.ONE, // +3315
-    OPCODES.STORE * 100 + MEMORY.F, // +2115
-
-    // 5. Decrementa n
-    OPCODES.LOAD * 100 + MEMORY.N, // +2014
-    OPCODES.SUBTRACT * 100 + 16, // +3016
-    OPCODES.STORE * 100 + MEMORY.N, // +2114
-
-    // 6. Volta ao início do loop
-    OPCODES.BRANCH * 100 + 3, // +4003
-
-    // 7. Imprime o resultado
-    OPCODES.WRITE * 100 + 16, // +1116
-    OPCODES.HALT * 100 + 0, // +4300
-
-    // 8. Caso especial (n < 0)
-    OPCODES.WRITE * 100 + 15, // +1115
-    OPCODES.HALT * 100 + 0, // +4300
-
-    // 9. Variáveis e constantes
-    0, // +0000 (n)
-    1, // +0001 (constante 1)
-    -1, // -0001 (constante -1)
-  ];
-
-  return smlCode;
+// Função para adicionar símbolos à tabela
+function addSymbol(symbol, type) {
+  let entry = symbolTable.find((e) => e.symbol === symbol && e.type === type);
+  if (!entry) {
+    const location =
+      type === "C" || type === "V" ? dataCounter-- : instructionCounter;
+    entry = new TableEntry(symbol, type, location);
+    symbolTable.push(entry);
+  }
+  return entry.location;
 }
 
-function writeBinaryCode(code) {
-  try {
-    const data = code
-      .map((instruction) => {
-        const prefix = instruction >= 0 ? "+" : "-";
-        return `${prefix}${Math.abs(instruction).toString().padStart(4, "0")}`;
-      })
-      .join("\n");
+// Validações das linhas de entrada
+function validateLine(line) {
+  const tokens = line.trim().split(" ");
+  if (tokens.length < 2) {
+    console.error("Erro: Linha inválida", line);
+    return false;
+  }
 
-    fs.writeFileSync("binary.txt", data);
-    console.log("Código SML gerado com sucesso em binary.txt");
-  } catch (err) {
-    console.error("Erro ao escrever o arquivo binary.txt:", err);
+  const lineNumber = parseInt(tokens[0]);
+  if (isNaN(lineNumber) || lineNumber < 0 || lineNumber > 99) {
+    console.error("Erro: Número da linha inválido", line);
+    return false;
+  }
+
+  const validCommands = ["rem", "input", "if", "let", "goto", "print", "end"];
+
+  if (!validCommands.includes(tokens[1])) {
+    console.error("Erro: Comando não reconhecido", tokens[1]);
+    return false;
+  }
+
+  return true;
+}
+
+// Processamento do comando `if`
+function processIf(tokens) {
+  const condVar = tokens[2];
+  const operator = tokens[3];
+  const compareValue = parseInt(tokens[4]);
+  const jumpLine = parseInt(tokens[6]);
+
+  const condLoc = addSymbol(condVar.charCodeAt(0), "V");
+  memory[instructionCounter++] = 2000 + condLoc; // LOAD condVar
+  const compareLoc = addSymbol(compareValue, "C");
+  memory[instructionCounter++] = 3100 + compareLoc; // SUB compareValue
+
+  // Gerenciar operadores
+  switch (operator) {
+    case "==":
+      flags.set(instructionCounter, jumpLine);
+      memory[instructionCounter++] = 4200; // BRANCHZERO
+      break;
+    case "!=":
+      flags.set(instructionCounter, jumpLine);
+      memory[instructionCounter++] = 4100; // BRANCHNEG
+      flags.set(instructionCounter, jumpLine);
+      memory[instructionCounter++] = 4200; // BRANCHZERO
+      break;
+    case "<":
+      flags.set(instructionCounter, jumpLine);
+      memory[instructionCounter++] = 4100; // BRANCHNEG
+      break;
+    case "<=":
+      flags.set(instructionCounter, jumpLine);
+      memory[instructionCounter++] = 4100; // BRANCHNEG
+      flags.set(instructionCounter, jumpLine);
+      memory[instructionCounter++] = 4200; // BRANCHZERO
+      break;
+    case ">":
+      flags.set(instructionCounter, jumpLine);
+      memory[instructionCounter++] = 3100; // Invertendo a lógica
+      flags.set(instructionCounter, jumpLine);
+      memory[instructionCounter++] = 4100; // BRANCHNEG
+      break;
+    case ">=":
+      flags.set(instructionCounter, jumpLine);
+      memory[instructionCounter++] = 4200; // BRANCHZERO
+      flags.set(instructionCounter, jumpLine);
+      memory[instructionCounter++] = 4100; // BRANCHNEG
+      break;
+    default:
+      console.error("Operador não reconhecido:", operator);
   }
 }
 
-function main() {
-  const sourceCode = readSourceCode();
-  if (sourceCode !== null) {
-    const smlCode = generateFactorialSML();
-    writeBinaryCode(smlCode);
+// Processamento do comando `let`
+function processLet(tokens) {
+  const variable = tokens[2];
+  const expression = tokens.slice(4).join(" ");
+  const varLoc = addSymbol(variable.charCodeAt(0), "V");
+
+  const exprParts = expression.split(" ");
+  if (exprParts.length === 1) {
+    const value = isNaN(exprParts[0])
+      ? addSymbol(exprParts[0].charCodeAt(0), "V")
+      : addSymbol(parseInt(exprParts[0]), "C");
+    memory[instructionCounter++] = 2000 + value; // LOAD valor
+  } else {
+    let currentLoc =
+      isNaN(exprParts[0]) === false
+        ? addSymbol(parseInt(exprParts[0]), "C")
+        : addSymbol(exprParts[0].charCodeAt(0), "V");
+    memory[instructionCounter++] = 2000 + currentLoc; // LOAD primeiro operando
+
+    for (let i = 1; i < exprParts.length; i += 2) {
+      const operator = exprParts[i];
+      const operand =
+        isNaN(exprParts[i + 1]) === false
+          ? addSymbol(parseInt(exprParts[i + 1]), "C")
+          : addSymbol(exprParts[i + 1].charCodeAt(0), "V");
+      const operatorCode = {
+        "+": 3000,
+        "-": 3100,
+        "*": 3300,
+        "/": 3200,
+        "%": 3300,
+      }[operator];
+      memory[instructionCounter++] = operatorCode + operand; // Operação
+    }
   }
+  memory[instructionCounter++] = 2100 + varLoc; // STORE variável
 }
 
-main();
+// Primeira passagem: análise inicial do código
+function firstPass(program) {
+  program.forEach((line) => {
+    if (!validateLine(line)) {
+      console.error("Erro: Linha inválida no programa SIMPLE:", line);
+      return;
+    }
+    const tokens = line.split(" ");
+    const lineNumber = parseInt(tokens[0]);
+    const command = tokens[1];
+
+    addSymbol(lineNumber, "L");
+
+    switch (command) {
+      case "rem":
+        break;
+      case "input":
+        const inputVar = tokens[2];
+        const inputLoc = addSymbol(inputVar.charCodeAt(0), "V");
+        memory[instructionCounter++] = 1000 + inputLoc;
+        break;
+      case "if":
+        processIf(tokens);
+        break;
+      case "let":
+        processLet(tokens);
+        break;
+      case "goto":
+        const targetLine = parseInt(tokens[2]);
+        flags.set(instructionCounter, targetLine);
+        memory[instructionCounter++] = 4000;
+        break;
+      case "print":
+        const printVar = tokens[2];
+        const printLoc = addSymbol(printVar.charCodeAt(0), "V");
+        memory[instructionCounter++] = 1100 + printLoc;
+        break;
+      case "end":
+        memory[instructionCounter++] = 4300;
+        break;
+      default:
+        console.error("Comando não reconhecido:", command);
+    }
+  });
+}
+
+// Segunda passagem: resolução de endereços de salto
+function secondPass() {
+  flags.forEach((targetLine, index) => {
+    const targetLoc = symbolTable.find(
+      (e) => e.symbol === targetLine && e.type === "L"
+    );
+    if (targetLoc) {
+      memory[index] += targetLoc.location;
+    } else {
+      console.error("Erro: Linha alvo não encontrada:", targetLine);
+    }
+  });
+}
+
+// Função principal para compilar
+function compileSimple(inputFile, outputFile) {
+  const source = fs.readFileSync(inputFile, "utf-8").split("\n");
+  firstPass(source);
+  secondPass();
+  const compiled = memory
+    .slice(0, instructionCounter)
+    .map((x) => String(x).padStart(4, "0"))
+    .join("\n");
+  fs.writeFileSync(outputFile, compiled);
+  console.log("Compilação concluída. Código salvo em", outputFile);
+}
+
+// Executar compilador
+compileSimple("source.txt", "binary.txt");
