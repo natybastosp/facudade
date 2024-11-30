@@ -6,7 +6,7 @@ Este é um sistema simples de gestão de cursos, alunos e professores, implement
 
 O código foi desenvolvido com base no seguinte diagrama de classes:
 
-![Diagrama de Classes](./diagrama.png) <!-- Coloque o arquivo do diagrama aqui, se possível -->
+![Diagrama de Classes](./diagrama.png)
 
 ## **Funcionamento**
 
