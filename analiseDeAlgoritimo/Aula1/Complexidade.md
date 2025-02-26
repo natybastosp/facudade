@@ -138,14 +138,13 @@ int funcao(int n){
 
 ```
 
-- A função acima tem complexidade **O()**, pois temos dois loops aninhados que vão de 0 até n.
+- A função acima tem complexidade **O(n^2)**, pois temos dois loops aninhados que vão de 0 até n.
 
 ```c
  n | #
- 1 |
- 2 |
- 3 |
- 4 |
- 5 |
-
+ 1 | 1
+ 2 | 4
+ 3 | 9
+ 4 | 16
+ 5 | 25
 ```
