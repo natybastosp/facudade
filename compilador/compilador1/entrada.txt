@@ -1,4 +1,0 @@
-10 LET X = 5
-30 PRINT X
-80 END
- 
